@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::LazyLock, time::Duration};
 
 use hid_rs::SafeCallback2;
-use sayo_api_rs::device::SayoDevice;
+use sayo_api_rs::device::SayoDeviceApi;
 use tokio::time::sleep;
 
 static HID_DEVICE_EVENT_HANDLER: LazyLock<SafeCallback2<u128, Vec<u8>, ()>> = LazyLock::new(|| {
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "Device connection changed: {:?}, Type: {:?}",
                         uuid, event_type
                     );
-                    let device = SayoDevice::from(uuid);
+                    let device = SayoDeviceApi::from(uuid);
                     match device.get_system_info().await {
                         Some(sys_info) => println!("System Info: {:?}", sys_info),
                         None => println!("Failed to fetch system info for {:?}", uuid),

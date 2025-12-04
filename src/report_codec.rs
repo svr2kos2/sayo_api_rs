@@ -9,7 +9,7 @@ use futures::future::Either;
 //use crate::api::sayo_device::structures_codec::structures_codec::*;
 use futures::{Future, channel::oneshot, executor::block_on, lock::Mutex};
 
-use crate::device::SayoDevice;
+use crate::device::SayoDeviceApi;
 use crate::structures::*;
 use crate::utility::future_delay;
 
@@ -89,7 +89,7 @@ impl ReportDecoder {
             return Ok(()); // 不是我们关心的报告ID，直接返回
         }
         let echo = header.echo(None).ok_or(ReportError::BadReportHeader)?;
-        if echo != SayoDevice::ECHO && echo != 0x00 {
+        if echo != SayoDeviceApi::ECHO && echo != 0x00 {
             return Ok(()); // 不是我们关心的echo，直接返回
         }
 

@@ -85,7 +85,10 @@ static REPORT_ID_CACHE_MAP: Lazy<std::sync::Mutex<HashMap<u128, ReportIdCache>>>
 // }
 
 pub async fn init_sayo_device() {
-    let _ = hid_rs::Hid::init_hid().await;
+    match hid_rs::Hid::init_hid().await {
+        Ok(_) => println!("HID initialized."),
+        Err(e) => println!("HID initialization failed: {:?}", e),
+    }
     // Default utilities - feel free to customize
     match hid_rs::Hid::sub_connection_changed(CONNECTION_CALLBACK.to_owned()).await {
         Ok(_) => println!("sayo_device init success"),
@@ -240,7 +243,7 @@ pub async fn unsub_connection_changed(callback: SafeCallback2<u128, bool, ()>) {
     };
 }
 
-pub async fn get_device_list() -> Vec<SayoDevice> {
+pub async fn get_device_list() -> Vec<SayoDeviceApi> {
     let devices = match hid_rs::Hid::get_device_list() {
         Ok(devices) => devices,
         Err(_) => {
@@ -339,36 +342,36 @@ impl ReportIdCache {
     }
 }
 
-pub struct SayoDevice {
+pub struct SayoDeviceApi {
     pub uuid: u128,
 }
-impl From<HidDevice> for SayoDevice {
+impl From<HidDevice> for SayoDeviceApi {
     fn from(hid_device: HidDevice) -> Self {
-        SayoDevice {
+        SayoDeviceApi {
             uuid: hid_device.uuid,
         }
     }
 }
-impl From<u128> for SayoDevice {
+impl From<u128> for SayoDeviceApi {
     fn from(uuid: u128) -> Self {
-        SayoDevice { uuid: uuid }
+        SayoDeviceApi { uuid: uuid }
     }
 }
 
-impl Into<HidDevice> for SayoDevice {
+impl Into<HidDevice> for SayoDeviceApi {
     fn into(self) -> HidDevice {
         HidDevice::from(self.uuid)
     }
 }
 
-impl SayoDevice {
+impl SayoDeviceApi {
     #[cfg(not(target_arch = "wasm32"))]
     pub const ECHO: u8 = 0x13;
     #[cfg(target_arch = "wasm32")]
     pub const ECHO: u8 = 0x12;
 
     pub fn from_uuid(uuid: u128) -> Self {
-        SayoDevice { uuid: uuid }
+        SayoDeviceApi { uuid: uuid }
     }
 
     pub async fn passiv_mode(&self) -> bool {
@@ -532,7 +535,7 @@ impl SayoDevice {
             }
 
             let response = self
-                .request_with_header(report_id, SayoDevice::ECHO, cmd, index, &T::empty())
+                .request_with_header(report_id, SayoDeviceApi::ECHO, cmd, index, &T::empty())
                 .await;
 
             let (header, content) = match response {
@@ -589,7 +592,7 @@ impl SayoDevice {
     }
 }
 
-impl SayoDevice {
+impl SayoDeviceApi {
     pub fn get_uuid(&self) -> u128 {
         return self.uuid;
     }
@@ -655,7 +658,7 @@ impl SayoDevice {
             SUBCMD_REBOOT,
             !SUBCMD_REBOOT,
         ]));
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_REBOOT, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_REBOOT, INDEX, &empty);
         match response.await {
             Some(_) => false,
             None => true,
@@ -671,7 +674,7 @@ impl SayoDevice {
             SUBCMD_RECOVERY,
             !SUBCMD_RECOVERY,
         ]));
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_REBOOT, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_REBOOT, INDEX, &empty);
         match response.await {
             Some(_) => false,
             None => true,
@@ -687,7 +690,7 @@ impl SayoDevice {
             SUBCMD_BOOTLOADER,
             !SUBCMD_BOOTLOADER,
         ]));
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_REBOOT, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_REBOOT, INDEX, &empty);
         match response.await {
             Some(_) => false,
             None => true,
@@ -704,7 +707,7 @@ impl SayoDevice {
         let mut content = str.bytes.into_vec();
         content.resize(len, 0);
         let bytes_content = ByteArray::new(RwBytes::new(content));
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, &bytes_content);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &bytes_content);
         match response.await {
             Some(content) => StringContent {
                 encoding_byte: Cell::new(Some(0x03)),
@@ -721,7 +724,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x01;
         const INDEX: u8 = 0x00;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, &str);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &str);
         let content = match response.await {
             Some(content) => content,
             None => return None,
@@ -736,7 +739,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const INDEX: u8 = 0x00;
         let empty = DeviceInfo::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_DEVICE_INFO, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_DEVICE_INFO, INDEX, &empty);
         let device_info = match response.await {
             Some(info) => info,
             None => return None,
@@ -748,7 +751,7 @@ impl SayoDevice {
         const INDEX: u8 = 0x00;
         let response = self.request(
             report_id,
-            SayoDevice::ECHO,
+            SayoDeviceApi::ECHO,
             CMD_DEVICE_INFO,
             INDEX,
             device_info,
@@ -760,7 +763,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const INDEX: u8 = 0x00;
         let empty = SystemInfo::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_SYSTEM_INFO, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_SYSTEM_INFO, INDEX, &empty);
         response.await
     }
     pub async fn set_system_info(&self, system_info: &SystemInfo) -> Option<SystemInfo> {
@@ -768,7 +771,7 @@ impl SayoDevice {
         const INDEX: u8 = 0x00;
         let response = self.request(
             report_id,
-            SayoDevice::ECHO,
+            SayoDeviceApi::ECHO,
             CMD_SYSTEM_INFO,
             INDEX,
             system_info,
@@ -781,7 +784,7 @@ impl SayoDevice {
         const CMD: u8 = 0x03;
         const INDEX: u8 = 0x00;
         let empty = OptionalBytes::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &empty);
         response.await
     }
     pub async fn set_optional_bytes(
@@ -791,7 +794,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x03;
         const INDEX: u8 = 0x00;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, optional_bytes);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, optional_bytes);
         response.await
     }
 
@@ -800,7 +803,7 @@ impl SayoDevice {
         const CMD: u8 = 0x04;
         const INDEX: u8 = 0x00;
         let empty = RFConfig::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &empty);
         response.await
     }
 
@@ -808,7 +811,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x04;
         const INDEX: u8 = 0x00;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, rf_config);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, rf_config);
         response.await
     }
 
@@ -824,7 +827,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x05;
         const INDEX: u8 = 0x00;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, password);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, password);
         match response.await {
             Some(_) => Some(true),
             None => Some(false),
@@ -843,7 +846,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x06;
         const INDEX: u8 = 0x00;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, INDEX, password);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, password);
         match response.await {
             Some(_) => Some(true),
             None => Some(false),
@@ -860,7 +863,7 @@ impl SayoDevice {
     pub async fn set_key_info(&self, index: u8, key_info: &KeyInfo) -> Option<KeyInfo> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x10;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, key_info);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, key_info);
         response.await
     }
 
@@ -873,7 +876,7 @@ impl SayoDevice {
     pub async fn set_led_info(&self, index: u8, led_info: &LEDInfo) -> Option<LEDInfo> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x11;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, led_info);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, led_info);
         response.await
     }
 
@@ -886,7 +889,7 @@ impl SayoDevice {
     pub async fn set_color_table(&self, index: u8, color_table: &ColorTable) -> Option<ColorTable> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x12;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, color_table);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, color_table);
         response.await
     }
 
@@ -894,7 +897,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x13;
         let empty = TouchSensitivity::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, &empty);
         response.await
     }
 
@@ -912,7 +915,7 @@ impl SayoDevice {
     ) -> Option<TouchSensitivity> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x13;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, touch_sensitivity);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, touch_sensitivity);
         response.await
     }
 
@@ -926,7 +929,7 @@ impl SayoDevice {
     pub async fn set_password(&self, index: u8, value: StringContent) -> Option<StringContent> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x16;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, &value);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, &value);
         response.await
     }
 
@@ -940,7 +943,7 @@ impl SayoDevice {
     pub async fn set_string(&self, index: u8, value: StringContent) -> Option<StringContent> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x17;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, &value);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, &value);
         response.await
     }
 
@@ -954,7 +957,7 @@ impl SayoDevice {
     pub async fn set_script_name(&self, index: u8, value: StringContent) -> Option<StringContent> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x19;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, &value);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, &value);
         response.await
     }
 
@@ -978,7 +981,7 @@ impl SayoDevice {
         let index: u8 = 0x00;
         let empty = ScreenBuffer::empty();
         let reports =
-            match report_codec::encode_report(report_id, SayoDevice::ECHO, cmd, index, &empty) {
+            match report_codec::encode_report(report_id, SayoDeviceApi::ECHO, cmd, index, &empty) {
                 Ok(reports) => reports,
                 Err(e) => {
                     println!("Pull screen buffer: Encode report failed: {}", e);
@@ -1008,7 +1011,7 @@ impl SayoDevice {
     ) -> Option<LcdDrawData> {
         let report_id = self.get_report_id();
         let cmd = layer;
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, data);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, data);
         response.await
     }
 
@@ -1019,7 +1022,7 @@ impl SayoDevice {
             Some(key) => ByteArray::new(RwBytes::new(vec![key])),
             None => ByteArray::empty(),
         };
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, 0, &bytes);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, 0, &bytes);
         response.await
     }
 
@@ -1030,7 +1033,7 @@ impl SayoDevice {
             Some(key) => ByteArray::new(RwBytes::new(vec![key])),
             None => ByteArray::empty(),
         };
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, 1, &bytes);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, 1, &bytes);
         response.await
     }
 
@@ -1045,7 +1048,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         let cmd: u8 = AnalogKeyInfo::CMD.expect("No CMD found for AnalogKeyInfo");
         let empty = AnalogKeyInfo::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, &empty);
         response.await
     }
 
@@ -1056,7 +1059,7 @@ impl SayoDevice {
     ) -> Option<AnalogKeyInfo> {
         let report_id = self.get_report_id();
         let cmd: u8 = AnalogKeyInfo::CMD.expect("No CMD found for AnalogKeyInfo");
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, key_info);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, key_info);
         response.await
     }
 
@@ -1064,7 +1067,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const INDEX: u8 = 0x00;
         let empty = ByteArray::new(RwBytes::new(vec![0x96, 0x72]));
-        let response = self.request(report_id, SayoDevice::ECHO, CMD_SAVE_ALL, INDEX, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD_SAVE_ALL, INDEX, &empty);
         match response.await {
             Some(_) => true,
             None => false,
@@ -1175,7 +1178,7 @@ impl SayoDevice {
         let cmd = T::CMD.expect("No CMD found for AddressableData in get_addressable_data_len");
         let over_addr = T::new(RwBytes::new(vec![0xFF, 0xFF, 0xFF, 0xFF]));
         let res = self
-            .request_with_header(report_id, SayoDevice::ECHO, cmd, index, &over_addr)
+            .request_with_header(report_id, SayoDeviceApi::ECHO, cmd, index, &over_addr)
             .await;
         if res.is_none() {
             return 0;
@@ -1205,7 +1208,7 @@ impl SayoDevice {
             (addr >> 24) as u8,
         ]));
 
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, &empty);
         response.await
     }
 
@@ -1444,7 +1447,7 @@ impl SayoDevice {
         }
         let mut responses = Vec::new();
         for packet in &packets {
-            let response = self.request(report_id, SayoDevice::ECHO, cmd, index, packet);
+            let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, packet);
             responses.push(response);
         }
         let mut complate = true;
@@ -1492,7 +1495,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         let cmd: u8 = AnalogKeyInfo2::CMD.expect("No CMD found for AnalogKeyInfo2");
         let empty = AnalogKeyInfo2::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, &empty);
         response.await
     }
 
@@ -1503,7 +1506,7 @@ impl SayoDevice {
     ) -> Option<AnalogKeyInfo2> {
         let report_id = self.get_report_id();
         let cmd: u8 = AnalogKeyInfo2::CMD.expect("No CMD found for AnalogKeyInfo2");
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, key_info);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, key_info);
         response.await
     }
 
@@ -1518,7 +1521,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         let cmd: u8 = AdvancedKeyBinding::CMD.expect("No CMD found for AdvancedKeyBinding");
         let empty = AdvancedKeyBinding::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, &empty);
         response.await
     }
 
@@ -1529,7 +1532,7 @@ impl SayoDevice {
     ) -> Option<AdvancedKeyBinding> {
         let report_id = self.get_report_id();
         let cmd: u8 = AdvancedKeyBinding::CMD.expect("No CMD found for AdvancedKeyBinding");
-        let response = self.request(report_id, SayoDevice::ECHO, cmd, index, key_info);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, key_info);
         response.await
     }
 
@@ -1537,7 +1540,7 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         let cmd: u8 = 0x1E;
         let response = self
-            .request(report_id, SayoDevice::ECHO, cmd, 0, &ByteArray::empty())
+            .request(report_id, SayoDeviceApi::ECHO, cmd, 0, &ByteArray::empty())
             .await;
         match response {
             Some(data) => data.into_vec(),
@@ -1551,7 +1554,7 @@ impl SayoDevice {
         let response = self
             .request(
                 report_id,
-                SayoDevice::ECHO,
+                SayoDeviceApi::ECHO,
                 cmd,
                 0,
                 &ByteArray::new(RwBytes::new(status)),
@@ -1563,14 +1566,14 @@ impl SayoDevice {
     pub async fn get_led_effect(&self) -> Option<LedEffect> {
         let report_id = self.get_report_id();
         let cmd: u8 = 0x26;
-        self.request(report_id, SayoDevice::ECHO, cmd, 0, &LedEffect::empty())
+        self.request(report_id, SayoDeviceApi::ECHO, cmd, 0, &LedEffect::empty())
             .await
     }
 
     pub async fn set_led_effect(&self, effect: &LedEffect) -> Option<LedEffect> {
         let report_id = self.get_report_id();
         let cmd: u8 = 0x26;
-        self.request(report_id, SayoDevice::ECHO, cmd, 0, effect)
+        self.request(report_id, SayoDeviceApi::ECHO, cmd, 0, effect)
             .await
     }
 
@@ -1589,7 +1592,7 @@ impl SayoDevice {
         let bytes = ByteArray::empty();
         let response = self.request(
             report_id,
-            SayoDevice::ECHO,
+            SayoDeviceApi::ECHO,
             CMD,
             from_index.unwrap_or(0x00),
             &bytes,
@@ -1600,7 +1603,7 @@ impl SayoDevice {
     pub async fn get_gamepad_cfg(&self) -> Option<GamePadCfg> {
         self.request(
             self.get_report_id(),
-            SayoDevice::ECHO,
+            SayoDeviceApi::ECHO,
             0x28,
             0,
             &GamePadCfg::empty(),
@@ -1609,7 +1612,7 @@ impl SayoDevice {
     }
 
     pub async fn set_gamepad_cfg(&self, cfg: &GamePadCfg) -> Option<GamePadCfg> {
-        self.request(self.get_report_id(), SayoDevice::ECHO, 0x28, 0, cfg)
+        self.request(self.get_report_id(), SayoDeviceApi::ECHO, 0x28, 0, cfg)
             .await
     }
 
@@ -1617,14 +1620,14 @@ impl SayoDevice {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x2A;
         let empty = AmbientLED::empty();
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, &empty);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, &empty);
         response.await
     }
 
     pub async fn set_ambient_led(&self, index: u8, ambient_led: &AmbientLED) -> Option<AmbientLED> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x2A;
-        let response = self.request(report_id, SayoDevice::ECHO, CMD, index, ambient_led);
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, index, ambient_led);
         response.await
     }
 
