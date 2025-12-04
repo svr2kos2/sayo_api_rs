@@ -1129,16 +1129,16 @@ impl SayoDeviceApi {
             .await
     }
 
-    pub async fn get_script(&self, index: u8) -> Option<(u32, SayoScript)> {
+    pub async fn get_script(&self, index: u8) -> Option<(u32, SayoScriptContent)> {
         //max address, script
         let (size, bytes) = match self.get_addressable_data::<SayoScriptPacket>(index).await {
             Some((size, data)) => (size, data),
             None => return None,
         };
-        Some((size, SayoScript::new(bytes)))
+        Some((size, SayoScriptContent::new(bytes)))
     }
 
-    pub async fn get_all_scripts(&self) -> Vec<(u32, SayoScript)> {
+    pub async fn get_all_scripts(&self) -> Vec<(u32, SayoScriptContent)> {
         let mut res = Vec::new();
         let mut index = 0;
         loop {
@@ -1154,7 +1154,7 @@ impl SayoDeviceApi {
     pub async fn set_script(
         &self,
         index: u8,
-        script: &SayoScript,
+        script: &SayoScriptContent,
         base_addr: usize,
         on_progress: impl Fn(f32) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>
         + Send

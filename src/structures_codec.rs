@@ -210,27 +210,6 @@ impl CodecableHidPackage for RFConfig {
     }
 }
 
-impl CodecableHidPackage for AdvancedSystemConfig {
-    const CMD: Option<u8> = Some(0x0E);
-
-    fn new(bytes: RwBytes) -> Self {
-        AdvancedSystemConfig { bytes }
-    }
-
-    fn into_vec(&self) -> Vec<u8> {
-        self.bytes.clone().into_vec()
-    }
-    fn empty() -> Self {
-        AdvancedSystemConfig {
-            bytes: RwBytes::new(vec![]),
-        }
-    }
-
-    fn deep_clone(&self) -> Self {
-        let bytes = self.bytes.deep_clone();
-        Self { bytes }
-    }
-}
 impl CodecableHidPackage for KeyInfo {
     const CMD: Option<u8> = Some(0x10);
 
@@ -362,18 +341,18 @@ impl CodecableHidPackage for AnalogKeyInfo {
     }
 }
 
-impl CodecableHidPackage for SayoScript {
+impl CodecableHidPackage for SayoScriptContent {
     const CMD: Option<u8> = Some(0x1A);
 
     fn new(bytes: RwBytes) -> Self {
-        SayoScript { bytes }
+        SayoScriptContent { bytes }
     }
 
     fn into_vec(&self) -> Vec<u8> {
         self.bytes.clone().into_vec()
     }
     fn empty() -> Self {
-        SayoScript {
+        SayoScriptContent {
             bytes: RwBytes::new(vec![]),
         }
     }

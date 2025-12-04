@@ -557,26 +557,6 @@ impl RFConfig {
 #[repr(C)]
 #[derive(Debug, Clone)]
 
-pub struct AdvancedSystemConfig {
-    pub bytes: RwBytes,
-}
-impl AdvancedSystemConfig {
-    pub fn data(&self, value: Option<u16>) -> Option<u16> {
-        self.bytes.u16(0, value)
-    }
-
-    pub fn sub_cmd(&self, value: Option<u8>) -> Option<u8> {
-        self.bytes.u8(2, value)
-    }
-
-    pub fn sub_cmd_inv(&self, value: Option<u8>) -> Option<u8> {
-        self.bytes.u8(3, value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone)]
-
 pub struct KeyData {
     pub bytes: RwBytes,
 }
@@ -1051,10 +1031,10 @@ impl AnalogKeyInfo {
 #[repr(C)]
 #[derive(Debug, Clone)]
 
-pub struct SayoScript {
+pub struct SayoScriptContent {
     pub bytes: RwBytes,
 }
-impl SayoScript {
+impl SayoScriptContent {
     pub fn len(&self) -> usize {
         return self.bytes.len();
     }
