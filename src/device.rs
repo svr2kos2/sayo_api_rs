@@ -779,18 +779,18 @@ impl SayoDeviceApi {
         response.await
     }
 
-    pub async fn get_optional_bytes(&self) -> Option<OptionalBytes> {
+    pub async fn get_optional_bytes(&self) -> Option<DeviceConfig> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x03;
         const INDEX: u8 = 0x00;
-        let empty = OptionalBytes::empty();
+        let empty = DeviceConfig::empty();
         let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &empty);
         response.await
     }
     pub async fn set_optional_bytes(
         &self,
-        optional_bytes: &OptionalBytes,
-    ) -> Option<OptionalBytes> {
+        optional_bytes: &DeviceConfig,
+    ) -> Option<DeviceConfig> {
         let report_id = self.get_report_id();
         const CMD: u8 = 0x03;
         const INDEX: u8 = 0x00;

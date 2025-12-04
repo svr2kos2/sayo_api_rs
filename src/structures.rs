@@ -361,10 +361,10 @@ impl SystemInfo {
 #[repr(C)]
 #[derive(Debug)]
 
-pub struct OptionalBytes {
+pub struct DeviceConfig {
     pub bytes: RwBytes,
 }
-impl OptionalBytes {
+impl DeviceConfig {
     pub fn display_width(&self, value: Option<u16>) -> Option<u16> {
         self.bytes.u16(0, value)
     }

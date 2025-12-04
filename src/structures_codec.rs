@@ -166,18 +166,18 @@ impl CodecableHidPackage for SystemInfo {
     }
 }
 
-impl CodecableHidPackage for OptionalBytes {
+impl CodecableHidPackage for DeviceConfig {
     const CMD: Option<u8> = Some(0x03);
 
     fn new(bytes: RwBytes) -> Self {
-        OptionalBytes { bytes }
+        DeviceConfig { bytes }
     }
 
     fn into_vec(&self) -> Vec<u8> {
         self.bytes.clone().into_vec()
     }
     fn empty() -> Self {
-        OptionalBytes {
+        DeviceConfig {
             bytes: RwBytes::new(vec![]),
         }
     }
