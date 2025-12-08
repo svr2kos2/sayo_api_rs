@@ -2194,8 +2194,7 @@ impl GamePadCfg {
 // }
 
 #[repr(C)]
-#[derive(Clone)]
-
+#[derive(Debug, Clone)]
 pub struct AmbientLED {
     pub bytes: RwBytes,
 }
