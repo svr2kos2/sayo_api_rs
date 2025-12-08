@@ -4,7 +4,7 @@ use std::cell::Cell;
 use super::byte_converter::{Encoding, RwBytes};
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct ByteArray {
     pub bytes: RwBytes,
@@ -16,7 +16,7 @@ impl ByteArray {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct HidReportHeader {
     pub bytes: RwBytes,
@@ -218,7 +218,7 @@ impl StringContent {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct DeviceInfo {
     pub bytes: RwBytes,
@@ -270,7 +270,7 @@ impl DeviceInfo {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct SystemInfo {
     pub bytes: RwBytes,
@@ -359,7 +359,7 @@ impl SystemInfo {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct DeviceConfig {
     pub bytes: RwBytes,
@@ -495,7 +495,7 @@ impl DeviceConfig {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct RFConfig {
     pub bytes: RwBytes,
@@ -1560,7 +1560,7 @@ impl DisplayData {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct DisplayAssets {
     pub bytes: RwBytes,
@@ -1621,7 +1621,7 @@ impl DisplayAssets {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct DisplayAssetsPacket {
     pub bytes: RwBytes,
@@ -1746,7 +1746,7 @@ impl LCDInfo {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct LcdDrawData {
     pub bytes: RwBytes,
@@ -1807,7 +1807,7 @@ impl LcdDrawData {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct ScreenBuffer {
     pub bytes: RwBytes,
@@ -1823,7 +1823,7 @@ impl ScreenBuffer {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 
 pub struct LedEffect {
     pub bytes: RwBytes,
