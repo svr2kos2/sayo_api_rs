@@ -567,15 +567,15 @@ impl KeyData {
         self.bytes.u8(0, value)
     }
 
-    pub fn reserve0(&self, value: Option<u8>) -> Option<u8> {
+    pub fn key_opt0(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(1, value)
     }
 
-    pub fn reserve1(&self, value: Option<u8>) -> Option<u8> {
+    pub fn key_opt1(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(2, value)
     }
 
-    pub fn reserve2(&self, value: Option<u8>) -> Option<u8> {
+    pub fn key_opt2(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(3, value)
     }
 
