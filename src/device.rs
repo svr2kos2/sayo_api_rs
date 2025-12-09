@@ -342,6 +342,7 @@ impl ReportIdCache {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SayoDeviceApi {
     pub uuid: u128,
 }
