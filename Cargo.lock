@@ -249,7 +249,6 @@ checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 [[package]]
 name = "hid_rs"
 version = "0.1.0"
-source = "git+https://github.com/svr2kos2/hid_rs.git#65f801251ec90ca9ab12968562b28d51c9ba199e"
 dependencies = [
  "android_logger",
  "anyhow",
@@ -263,6 +262,7 @@ dependencies = [
  "log",
  "once_cell",
  "oslog",
+ "pollster",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -457,6 +457,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "pollster"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -548,6 +554,7 @@ dependencies = [
  "futures-timer",
  "hid_rs",
  "once_cell",
+ "pollster",
  "tokio",
  "uuid",
 ]

@@ -7,7 +7,8 @@ use std::{borrow::BorrowMut, cmp::min, collections::VecDeque};
 
 use futures::future::Either;
 //use crate::api::sayo_device::structures_codec::structures_codec::*;
-use futures::{Future, channel::oneshot, executor::block_on, lock::Mutex};
+use futures::{Future, channel::oneshot};
+use std::sync::Mutex;
 
 use crate::device::SayoDeviceApi;
 use crate::structures::*;
@@ -126,20 +127,20 @@ impl ReportDecoder {
         match status {
             0x01 => {
                 // success & continue
-                let mut buffers = block_on(self.buffers.lock());
-                let buffer = buffers.entry(handle).or_insert(Vec::new());
-                buffer.extend(data);
-                drop(buffers);
+                if let Ok(mut buffers) = self.buffers.lock() {
+                    let buffer = buffers.entry(handle).or_insert(Vec::new());
+                    buffer.extend(data);
+                }
                 //println!("Report arrived cotinue: {:?}", index);
             }
             _ => {
-                let mut buffers = block_on(self.buffers.lock());
-                if buffers.contains_key(&handle) {
-                    let buffer = buffers.entry(handle).or_insert(Vec::new());
-                    data.splice(0..0, buffer.clone());
-                    buffers.remove(&handle);
+                if let Ok(mut buffers) = self.buffers.lock() {
+                    if buffers.contains_key(&handle) {
+                        let buffer = buffers.entry(handle).or_insert(Vec::new());
+                        data.splice(0..0, buffer.clone());
+                        buffers.remove(&handle);
+                    }
                 }
-                drop(buffers);
                 //println!("Report arrived done: {:?}", index);
                 self.on_package_complete(header, data);
             }
@@ -148,17 +149,16 @@ impl ReportDecoder {
         Ok(())
     }
 
-    // 将状态日志记录提取为单独的方法
     fn log_status(&self, status: u8, cmd: u8, index: u8, data: &[u8]) {
         match status {
-            0x00 => { // success & end
-                // println!("Report arrived done: {:?}", index);
+            0x00 => {
+                // success & end
             }
-            0x01 => { // success & continue
-                // println!("Report arrived cotinue: {:02X?} {:02X?}", cmd, index);
+            0x01 => {
+                // success & continue
             }
-            0x02 => { // gb18030 string
-                // println!("GB18030 string: {:02X?} {:02X?}", cmd, index);
+            0x02 => {
+                // gb18030 string
             }
             0x03 => {
                 // utf16le string
@@ -200,7 +200,7 @@ impl ReportDecoder {
                 println!("Index cannot be written: {:02X?} {:02X?}", cmd, index);
             }
             0x3F => {
-                // index does not exist
+                // cmd does not exist
                 println!("Cmd does not exist: {:02X?} {:02X?}", cmd, index);
             }
             _ => {
@@ -267,7 +267,10 @@ impl ReportDecoder {
         // if cmd != 0x13 && cmd != 0x14 && cmd != 0x15 {
         //     println!("package arrived: {:02X?} {:02X?}", header.into_vec(), data);
         // }
-        let mut waiter_channels = block_on(self.waiter_channels.lock());
+        let mut waiter_channels = match self.waiter_channels.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let waiters = waiter_channels.get_mut(&handle);
         let waiter = match waiters {
             Some(waiters) => {
@@ -311,7 +314,10 @@ impl ReportDecoder {
         let handle = (report_id, cmd, index);
         //println!("Request response: {:02X?}", handle);
         let (tx, rx) = oneshot::channel::<(HidReportHeader, Vec<u8>)>();
-        let mut waiter_channels = block_on(self.waiter_channels.lock());
+        let mut waiter_channels = match self.waiter_channels.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let waiters = waiter_channels.entry(handle).or_insert(VecDeque::new());
         waiters.push_back(tx);
         // if cmd != 0x25 && cmd != 0x14 && cmd != 0x15 && cmd != 0x1C {

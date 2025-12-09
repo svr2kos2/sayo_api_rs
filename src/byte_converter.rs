@@ -1,7 +1,5 @@
 use encoding_rs::{GB18030, UTF_16LE};
-use futures::executor::block_on;
-use futures::lock::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // 添加错误类型定义
 #[derive(Debug, Clone)]
@@ -80,9 +78,13 @@ impl std::fmt::Display for RwBytes {
 }
 
 impl RwBytes {
+    fn lock_bytes(&self) -> std::sync::MutexGuard<'_, Vec<u8>> {
+        self.bytes.lock().expect("bytes lock poisoned")
+    }
+
     pub fn deep_clone(&self) -> Self {
         RwBytes {
-            bytes: Arc::new(Mutex::new(block_on(self.bytes.lock()).clone())),
+            bytes: Arc::new(Mutex::new(self.lock_bytes().clone())),
             offset: self.offset,
             len: self.len,
         }
@@ -133,7 +135,7 @@ impl RwBytes {
 
     pub fn ref_at(&self, index: usize, len: usize) -> Option<RwBytes> {
         let offset = self.offset + index;
-        let data = block_on(self.bytes.lock());
+        let data = self.lock_bytes();
 
         if offset + len > data.len() {
             println!(
@@ -153,7 +155,7 @@ impl RwBytes {
     }
 
     pub fn into_vec(self) -> Vec<u8> {
-        let bytes = block_on(self.bytes.lock());
+        let bytes = self.lock_bytes();
         if self.offset + self.len > bytes.len() {
             // 使用 Result 类型会更好，但为了保持兼容性，这里仍使用 panic
             panic!(
@@ -173,7 +175,7 @@ impl RwBytes {
     // 添加只读方法
 
     pub fn read_u8(&self, index: usize) -> Option<u8> {
-        let data = block_on(self.bytes.lock());
+        let data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index >= data.len() {
             return None;
@@ -182,7 +184,7 @@ impl RwBytes {
     }
 
     pub fn u8(&self, index: usize, value: Option<u8>) -> Option<u8> {
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index >= data.len() {
             return None;
@@ -194,7 +196,7 @@ impl RwBytes {
     }
 
     pub fn read_u16(&self, index: usize) -> Option<u16> {
-        let data = block_on(self.bytes.lock());
+        let data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 1 >= data.len() {
             return None;
@@ -206,7 +208,7 @@ impl RwBytes {
     }
 
     pub fn u16(&self, index: usize, value: Option<u16>) -> Option<u16> {
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 1 >= data.len() {
             return None;
@@ -222,7 +224,7 @@ impl RwBytes {
     }
 
     pub fn read_i16(&self, index: usize) -> Option<i16> {
-        let data = block_on(self.bytes.lock());
+        let data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 1 >= data.len() {
             return None;
@@ -234,7 +236,7 @@ impl RwBytes {
     }
 
     pub fn i16(&self, index: usize, value: Option<i16>) -> Option<i16> {
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 1 >= data.len() {
             return None;
@@ -250,7 +252,7 @@ impl RwBytes {
     }
 
     pub fn read_u32(&self, index: usize) -> Option<u32> {
-        let data = block_on(self.bytes.lock());
+        let data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 3 >= data.len() {
             return None;
@@ -264,7 +266,7 @@ impl RwBytes {
     }
 
     pub fn u32(&self, index: usize, value: Option<u32>) -> Option<u32> {
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
         if actual_index + 3 >= data.len() {
             return None;
@@ -282,7 +284,7 @@ impl RwBytes {
     }
 
     pub fn vec(&self, index: usize, len: Option<usize>, value: Option<Vec<u8>>) -> Option<Vec<u8>> {
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
 
         if let Some(value) = value {
@@ -309,7 +311,7 @@ impl RwBytes {
             Err(_) => return None,
         };
 
-        let mut data = block_on(self.bytes.lock());
+        let mut data = self.lock_bytes();
         let actual_index = self.offset + index;
 
         if let Some(value) = value {

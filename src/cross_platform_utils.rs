@@ -2,6 +2,7 @@
 
 use futures::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
+use pollster::block_on;
 
 // 跨平台的异步任务启动器
 pub fn spawn_background_task<F>(future: F)
@@ -12,7 +13,7 @@ where
     {
         // Desktop环境：使用线程池
         std::thread::spawn(move || {
-            futures::executor::block_on(future);
+            block_on(future);
         });
     }
 
@@ -32,7 +33,7 @@ where
     {
         // Desktop环境：使用线程池
         std::thread::spawn(move || {
-            futures::executor::block_on(future);
+            block_on(future);
         });
     }
 

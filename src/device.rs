@@ -1,4 +1,5 @@
-use futures::executor::block_on;
+use pollster::block_on;
+use futures::Future;
 use futures::future::Either;
 use futures::lock::Mutex;
 use once_cell::sync::Lazy;
@@ -15,6 +16,10 @@ use crate::utility::future_delay;
 use crate::byte_converter::{Encoding, RwBytes};
 use hid_rs::{self, HidDevice, SafeCallback, SafeCallback2};
 
+fn block_in_thread<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> T {
+    std::thread::spawn(move || block_on(future)).join().expect("async worker panicked")
+}
+
 use super::structures::*;
 use super::structures_codec::AddressableData;
 use crate::structures_codec::CodecableHidPackage;
@@ -23,6 +28,19 @@ use crate::structures_codec::CodecableHidPackage;
 
 #[path = "report_codec.rs"]
 mod report_codec;
+
+fn require_report_codec(uuid: u128) -> Option<Arc<Mutex<report_codec::ReportDecoder>>> {
+    let mut binding = REPORT_BUFFER_CODEC.try_lock()?;
+    if let Some(existing) = binding.get(&uuid) {
+        return Some(existing.clone());
+    }
+    let decoder = Arc::new(Mutex::new(report_codec::ReportDecoder::new(
+        uuid,
+        Arc::new(on_broadcast_arrived),
+    )));
+    binding.insert(uuid, decoder.clone());
+    Some(decoder)
+}
 
 static REPORT_BUFFER_CODEC: Lazy<Mutex<HashMap<u128, Arc<Mutex<report_codec::ReportDecoder>>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -41,15 +59,13 @@ static CONNECTION_CALLBACK: Lazy<SafeCallback2<u128, bool, ()>> = Lazy::new(|| {
         {
             let hid_m = hid;
             let connected_m = connected;
-            std::thread::spawn(move || {
-                block_on(async move {
-                    println!(
-                        "on_connection_changed called from CONNECTION_CALLBACK: {:?} {:?}",
-                        uuid::Uuid::from_u128(hid_m),
-                        connected_m
-                    );
-                    let _ = on_connection_changed(hid_m, connected_m).await;
-                });
+            block_in_thread(async move {
+                println!(
+                    "on_connection_changed called from CONNECTION_CALLBACK: {:?} {:?}",
+                    uuid::Uuid::from_u128(hid_m),
+                    connected_m
+                );
+                let _ = on_connection_changed(hid_m, connected_m).await;
             });
         }
 
@@ -89,10 +105,11 @@ pub async fn init_sayo_device() {
         Ok(_) => println!("HID initialized."),
         Err(e) => println!("HID initialization failed: {:?}", e),
     }
-    // Default utilities - feel free to customize
-    match hid_rs::Hid::sub_connection_changed(CONNECTION_CALLBACK.to_owned()).await {
-        Ok(_) => println!("sayo_device init success"),
-        Err(e) => println!("sayo_device init failed: {:?}", e),
+
+    // Subscribe to connection changes so we can initialize per-device report decoders on attach.
+    match hid_rs::Hid::sub_connection_changed(CONNECTION_CALLBACK.clone()).await {
+        Ok(_) => println!("Connection change subscription registered."),
+        Err(e) => println!("Connection change subscription failed: {:?}", e),
     }
 }
 
@@ -116,14 +133,8 @@ async fn on_connection_changed(uuid: u128, connected: bool) -> bool {
         // 先处理设备状态
         // 再处理报告缓冲区编解码器
         {
-            let mut binding = REPORT_BUFFER_CODEC.lock().await;
-            binding.insert(
-                hid.uuid,
-                Arc::new(Mutex::new(report_codec::ReportDecoder::new(
-                    hid.uuid,
-                    Arc::new(on_broadcast_arrived),
-                ))),
-            );
+            // Ensure decoder exists (best-effort; ignore if lock is busy)
+            let _ = require_report_codec(hid.uuid);
         } // 释放REPORT_BUFFER_CODEC锁
 
         // 添加报告监听器
@@ -172,7 +183,9 @@ async fn on_connection_changed(uuid: u128, connected: bool) -> bool {
 fn on_broadcast_arrived(device: u128, broadcast: &mut BroadCast) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let callbacks = block_on(BROADCAST_CALLBACKS.lock());
+        let callbacks = BROADCAST_CALLBACKS
+            .try_lock()
+            .expect("BROADCAST_CALLBACKS lock poisoned");
         if let Some(callback) = callbacks.get(&device) {
             let callback_clone = callback.clone();
             drop(callbacks);
@@ -205,18 +218,21 @@ fn on_report_arrived(
         println!("Report arrived: {:02X?} {:02X?}", header_bytes, body_bytes);
     }
     // println!("Report arrived ({:02X?}): {:02X?} {:02X?} end;", data.len(), header_bytes, body_bytes);
-    let mut binding = block_on(REPORT_BUFFER_CODEC.lock());
-    let wrap_codec = binding
-        .get_mut(&uuid)
-        .cloned()
-        .expect("No codec found for device {:?}");
-    drop(binding);
-    //codec.join(&mut data.clone());Failed to fetch system info
-    let mut codec = block_on(wrap_codec.lock());
-    if let Err(e) = codec.join(&mut data.clone()) {
-        println!("Failed to join packet: {}", e);
+    // Lazily ensure a ReportDecoder exists to avoid executor re-entry panics when callbacks race.
+    let Some(wrap_codec) = require_report_codec(uuid) else {
+        println!("ReportDecoder unavailable (lock busy?) for device {:?}, dropping packet", uuid::Uuid::from_u128(uuid));
+        return Box::pin(async {});
+    };
+
+    // If the codec lock is busy, drop the report to avoid blocking.
+    if let Some(mut codec) = wrap_codec.try_lock() {
+        if let Err(e) = codec.join(&mut data.clone()) {
+            println!("Failed to join packet: {}", e);
+        }
+    } else {
+        println!("ReportDecoder busy for device {:?}, dropping packet", uuid::Uuid::from_u128(uuid));
     }
-    drop(codec);
+
     // if data[6] != 0xFF && data[6] != 0x13 && data[6] != 0x25 && data[6] != 0x15 && data[6] != 0x27 {
     //     let packet_len = (data[4] as u16 | (data[5] as u16) << 8) & 0x03FF;
     //     println!("Report arrived: {:02X?} {:02X?}", data[..8].to_vec(), data[8..(8 + packet_len as usize)].to_vec());
@@ -456,17 +472,17 @@ impl SayoDeviceApi {
         index: u8,
         content: &T,
     ) -> Option<(HidReportHeader, T)> {
-        let mut binding = block_on(REPORT_BUFFER_CODEC.lock());
-        let wrap_codec = match binding.get_mut(&self.uuid).cloned() {
+        let wrap_codec = match require_report_codec(self.uuid) {
             Some(codec) => codec,
             None => {
-                println!("No codec found for device");
+                println!("No codec found for device (lock busy?)");
                 return None;
             }
         };
-        drop(binding);
         let response = {
-            let codec = block_on(wrap_codec.lock());
+            let codec = wrap_codec
+                .try_lock()
+                .expect("wrap_codec lock poisoned");
             codec.request_response::<T>(report_id, cmd, index)
         };
         // drop(codec);
@@ -963,16 +979,14 @@ impl SayoDeviceApi {
     }
 
     pub async fn pull_screen_buffer(&self, len: &u32) -> Vec<u8> {
-        let mut binding = block_on(REPORT_BUFFER_CODEC.lock());
-        let wrap_codec = binding.get_mut(&self.uuid).cloned();
-        if wrap_codec.is_none() {
-            println!("No codec found for device");
+        let Some(wrap_codec) = require_report_codec(self.uuid) else {
+            println!("No codec found for device (lock busy?)");
             return Vec::new();
-        }
-        let wrap_codec = wrap_codec.expect("No codec found for device");
-        drop(binding);
+        };
         //codec.join(&mut data.clone());
-        let mut codec = block_on(wrap_codec.lock());
+        let mut codec = wrap_codec
+            .try_lock()
+            .expect("wrap_codec lock poisoned");
         codec.resize_screen_buffer(len.clone() as usize);
         let mut res: Vec<u8> = vec![0; len.clone() as usize];
         codec.get_screen_buffer(&mut res);
@@ -1467,7 +1481,7 @@ impl SayoDeviceApi {
             #[cfg(target_arch = "wasm32")]
             let _ = on_progress(progress).await;
             #[cfg(not(target_arch = "wasm32"))]
-            let _ = block_on(on_progress(progress));
+            let _ = block_in_thread(on_progress(progress));
         }
         _ = self.get_addressable_data_len::<T>(index).await;
         if complate {

@@ -11,8 +11,9 @@ path = "examples/simple_test.rs"
 futures = "0.3.30"
 encoding_rs = "0.8.34"
 once_cell = "1.19.0"
-hid_rs = { git = "https://github.com/svr2kos2/hid_rs.git" }
+hid_rs = { path = "../hid_rs" }
 uuid = "1.19.0"
+pollster = "0.3"
 
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))'.dependencies]
 futures-timer = "3.0.3"
