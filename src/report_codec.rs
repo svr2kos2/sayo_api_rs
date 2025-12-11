@@ -61,12 +61,14 @@ pub struct ReportDecoder {
         Mutex<HashMap<(u8, u8, u8), VecDeque<oneshot::Sender<(HidReportHeader, Vec<u8>)>>>>,
     screen_buffer: Vec<u8>,
     broadcast: Arc<dyn Fn(u128, &mut BroadCast) + Send + Sync + 'static>,
+    cmd_response: Arc<dyn Fn(u128, HidReportHeader, Vec<u8>) + Send + Sync + 'static>,
 }
 
 impl ReportDecoder {
     pub fn new(
         handle: u128,
         on_broadcast: Arc<dyn Fn(u128, &mut BroadCast) + Send + Sync + 'static>,
+        on_cmd_response: Arc<dyn Fn(u128, HidReportHeader, Vec<u8>) + Send + Sync + 'static>,
     ) -> Self {
         ReportDecoder {
             buffers: Mutex::new(HashMap::new()),
@@ -74,6 +76,7 @@ impl ReportDecoder {
             screen_buffer: Vec::new(),
             handle: handle,
             broadcast: on_broadcast,
+            cmd_response: on_cmd_response,
         }
     }
 
@@ -243,6 +246,7 @@ impl ReportDecoder {
             let broadcast = &mut BroadCast::new(RwBytes::new(data));
             self.broadcast.clone()(self.handle, broadcast);
         } else {
+            (self.cmd_response.clone())(self.handle, header.clone(), data.clone());
             self.on_response_arrived(header, data);
         }
     }

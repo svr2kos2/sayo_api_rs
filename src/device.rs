@@ -37,6 +37,7 @@ fn require_report_codec(uuid: u128) -> Option<Arc<Mutex<report_codec::ReportDeco
     let decoder = Arc::new(Mutex::new(report_codec::ReportDecoder::new(
         uuid,
         Arc::new(on_broadcast_arrived),
+        Arc::new(on_cmd_response_arrived),
     )));
     binding.insert(uuid, decoder.clone());
     Some(decoder)
@@ -89,7 +90,10 @@ static CONNECTION_CALLBACK: Lazy<SafeCallback2<u128, bool, ()>> = Lazy::new(|| {
 });
 static REPORT_CALLBACKS: Lazy<Mutex<HashMap<u128, SafeCallback2<u128, Vec<u8>, ()>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
-static BROADCAST_CALLBACKS: Lazy<Mutex<HashMap<u128, SafeCallback<BroadCast, ()>>>> =
+static BROADCAST_CALLBACKS: Lazy<Mutex<HashMap<u128, SafeCallback2<u128, BroadCast, ()>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static CMD_RESPONSE_CALLBACKS:
+    Lazy<Mutex<HashMap<u128, SafeCallback2<u128, (HidReportHeader, Vec<u8>), ()>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Global per-device cache for report-id presence
@@ -187,9 +191,11 @@ fn on_broadcast_arrived(device: u128, broadcast: &mut BroadCast) {
             .try_lock()
             .expect("BROADCAST_CALLBACKS lock poisoned");
         if let Some(callback) = callbacks.get(&device) {
+            use pollster::FutureExt;
+
             let callback_clone = callback.clone();
             drop(callbacks);
-            let _ = callback_clone.call(broadcast.clone());
+            let _ = callback_clone.call(device, broadcast.clone()).block_on();
         }
     }
 
@@ -201,7 +207,35 @@ fn on_broadcast_arrived(device: u128, broadcast: &mut BroadCast) {
             if let Some(callback) = callbacks.get(&device) {
                 let callback_clone = callback.clone();
                 drop(callbacks);
-                let _ = callback_clone.call(payload).await;
+                let _ = callback_clone.call(device, payload).await;
+            }
+        });
+    }
+}
+
+fn on_cmd_response_arrived(device: u128, header: HidReportHeader, data: Vec<u8>) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let callbacks = CMD_RESPONSE_CALLBACKS
+            .try_lock()
+            .expect("CMD_RESPONSE_CALLBACKS lock poisoned");
+        if let Some(callback) = callbacks.get(&device) {
+            let callback_clone = callback.clone();
+            drop(callbacks);
+            let _ = callback_clone.call(device, (header.clone(), data.clone()));
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let payload_header = header.clone();
+        let payload_data = data.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let callbacks = CMD_RESPONSE_CALLBACKS.lock().await;
+            if let Some(callback) = callbacks.get(&device) {
+                let callback_clone = callback.clone();
+                drop(callbacks);
+                let _ = callback_clone.call(device, (payload_header, payload_data)).await;
             }
         });
     }
@@ -214,9 +248,9 @@ fn on_report_arrived(
     let cmd = data.get(6).cloned().unwrap_or(0);
     let header_bytes = &data[..8.min(data.len())];
     let body_bytes = &data[8.min(data.len())..];
-    if cmd != 0xFF && cmd != 0x13 && cmd != 0x25 && cmd != 0x15 && cmd != 0x27 {
-        println!("Report arrived: {:02X?} {:02X?}", header_bytes, body_bytes);
-    }
+    // if cmd != 0xFF && cmd != 0x13 && cmd != 0x25 && cmd != 0x15 && cmd != 0x27 {
+    //     println!("Report arrived: {:02X?} {:02X?}", header_bytes, body_bytes);
+    // }
     // println!("Report arrived ({:02X?}): {:02X?} {:02X?} end;", data.len(), header_bytes, body_bytes);
     // Lazily ensure a ReportDecoder exists to avoid executor re-entry panics when callbacks race.
     let Some(wrap_codec) = require_report_codec(uuid) else {
@@ -224,13 +258,37 @@ fn on_report_arrived(
         return Box::pin(async {});
     };
 
-    // If the codec lock is busy, drop the report to avoid blocking.
-    if let Some(mut codec) = wrap_codec.try_lock() {
-        if let Err(e) = codec.join(&mut data.clone()) {
-            println!("Failed to join packet: {}", e);
+    // 如果锁繁忙，短暂等待（最多 20ms）再放弃，避免长时间阻塞或死锁。
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let deadline = Instant::now() + Duration::from_millis(20);
+        loop {
+            if let Some(mut codec) = wrap_codec.try_lock() {
+                if let Err(e) = codec.join(&mut data.clone()) {
+                    println!("Failed to join packet: {}", e);
+                }
+                break;
+            }
+
+            if Instant::now() >= deadline {
+                println!("ReportDecoder lock timeout for device {:?}, dropping packet", uuid::Uuid::from_u128(uuid));
+                break;
+            }
+
+            // 小睡一会儿再抢锁，减少忙等
+            std::thread::sleep(Duration::from_micros(200));
         }
-    } else {
-        println!("ReportDecoder busy for device {:?}, dropping packet", uuid::Uuid::from_u128(uuid));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(mut codec) = wrap_codec.try_lock() {
+            if let Err(e) = codec.join(&mut data.clone()) {
+                println!("Failed to join packet: {}", e);
+            }
+        } else {
+            println!("ReportDecoder unavailable (lock busy?) for device {:?}, dropping packet", uuid::Uuid::from_u128(uuid));
+        }
     }
 
     // if data[6] != 0xFF && data[6] != 0x13 && data[6] != 0x25 && data[6] != 0x15 && data[6] != 0x27 {
@@ -257,6 +315,33 @@ pub async fn unsub_connection_changed(callback: SafeCallback2<u128, bool, ()>) {
             println!("unsub_connection_changed failed");
         }
     };
+}
+
+pub async fn sub_cmd_response(
+    uuid: u128,
+    callback: &SafeCallback2<u128, (HidReportHeader, Vec<u8>), ()>,
+) -> Result<(), String> {
+    let mut callbacks = CMD_RESPONSE_CALLBACKS.lock().await;
+    callbacks.insert(uuid, callback.clone());
+    Ok(())
+}
+
+pub async fn unsub_cmd_response(uuid: u128) -> Result<(), String> {
+    let mut callbacks = CMD_RESPONSE_CALLBACKS.lock().await;
+    callbacks.remove(&uuid);
+    Ok(())
+}
+
+pub async fn sub_broadcast(uuid: u128, callback: &SafeCallback2<u128, BroadCast, ()>) -> Result<(), String> {
+    let mut callbacks = BROADCAST_CALLBACKS.lock().await;
+    callbacks.insert(uuid, callback.clone());
+    Ok(())
+}
+
+pub async fn unsub_broadcast(uuid: u128) -> Result<(), String> {
+    let mut callbacks = BROADCAST_CALLBACKS.lock().await;
+    callbacks.remove(&uuid);
+    Ok(())
 }
 
 pub async fn get_device_list() -> Vec<SayoDeviceApi> {
@@ -358,7 +443,7 @@ impl ReportIdCache {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SayoDeviceApi {
     pub uuid: u128,
 }
@@ -438,13 +523,13 @@ impl SayoDeviceApi {
     async fn send_hid_report(&self, data: Vec<Vec<u8>>) -> Result<(), &'static str> {
         let hid = HidDevice::from(self.uuid);
         for report in data {
-            if report[6] != 0x13 && report[6] != 0x25 && report[6] != 0x15 && report[6] != 0x27 {
-                println!(
-                    "Sending report: {:02X?} {:02X?}",
-                    report[..8].to_vec(),
-                    report[8..].to_vec()
-                );
-            }
+            // if report[6] != 0x13 && report[6] != 0x25 && report[6] != 0x15 && report[6] != 0x27 {
+            //     println!(
+            //         "Sending report: {:02X?} {:02X?}",
+            //         report[..8].to_vec(),
+            //         report[8..].to_vec()
+            //     );
+            // }
             // println!("Sending report: {:02X?}", report);
             let timeout = future_delay(SEND_TIMEOUT_MS);
             let send = hid.send_report(report);
@@ -479,13 +564,11 @@ impl SayoDeviceApi {
                 return None;
             }
         };
+        // 获取响应句柄后立刻释放锁，避免阻塞后续上报拼包
         let response = {
-            let codec = wrap_codec
-                .try_lock()
-                .expect("wrap_codec lock poisoned");
-            codec.request_response::<T>(report_id, cmd, index)
+            let mut codec_guard = wrap_codec.lock().await;
+            codec_guard.request_response::<T>(report_id, cmd, index)
         };
-        // drop(codec);
         let reports = match report_codec::encode_report(report_id, echo, cmd, index, content) {
             Ok(reports) => reports,
             Err(e) => {
@@ -983,14 +1066,13 @@ impl SayoDeviceApi {
             println!("No codec found for device (lock busy?)");
             return Vec::new();
         };
-        //codec.join(&mut data.clone());
-        let mut codec = wrap_codec
-            .try_lock()
-            .expect("wrap_codec lock poisoned");
-        codec.resize_screen_buffer(len.clone() as usize);
+        // 仅在读取缓冲区时持锁，随后立即释放以便 on_report_arrived 拼包
         let mut res: Vec<u8> = vec![0; len.clone() as usize];
-        codec.get_screen_buffer(&mut res);
-        drop(codec);
+        {
+            let mut codec = wrap_codec.lock().await;
+            codec.resize_screen_buffer(len.clone() as usize);
+            codec.get_screen_buffer(&mut res);
+        }
         let report_id = self.get_report_id();
         let cmd: u8 = ScreenBuffer::CMD.expect("No CMD found for ScreenBuffer");
         let index: u8 = 0x00;

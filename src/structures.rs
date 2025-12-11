@@ -2380,7 +2380,7 @@ pub struct BroadCastData {
     pub bytes: RwBytes,
 }
 impl BroadCastData {
-    pub fn type_(&self, value: Option<u8>) -> Option<u8> {
+    pub fn data_type(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(0, value)
     }
 
@@ -2391,7 +2391,7 @@ impl BroadCastData {
         }
     }
     fn data_len(&self) -> Option<u8> {
-        let tp = match self.type_(None) {
+        let tp = match self.data_type(None) {
             Some(tp) => tp,
             None => return None,
         };
@@ -2411,7 +2411,7 @@ impl BroadCastData {
     }
 
     pub fn should_skip_first_byte(&self) -> Option<bool> {
-        match self.type_(None) {
+        match self.data_type(None) {
             Some(tp) => {
                 if tp >= 0xE0 {
                     Some(true)
@@ -2447,7 +2447,7 @@ impl BroadCastData {
 
     pub fn type_str(&self) -> String {
         let res = match self
-            .type_(None)
+            .data_type(None)
             .expect("Can not get type in BroadCastData::type_str")
         {
             0x00 => "BRD_STOP",
@@ -2480,7 +2480,7 @@ impl BroadCastData {
 }
 impl std::fmt::Debug for BroadCastData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let tp = match self.clone().type_(None) {
+        let tp = match self.clone().data_type(None) {
             Some(tp) => tp,
             None => return write!(f, "Type: None"),
         };
@@ -2556,11 +2556,11 @@ impl BroadCast {
             };
             let data = BroadCastData { bytes };
             i += data_len;
-            if data.type_(None) == Some(0x00) {
+            if data.data_type(None) == Some(0x00) {
                 println!("BroadCast::data: end");
                 break;
             }
-            let tp = data.type_(None);
+            let tp = data.data_type(None);
             res.push(data);
             if tp == Some(0xE1) {
                 // my boss said, just skip the rest of data
