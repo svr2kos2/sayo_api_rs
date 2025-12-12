@@ -214,15 +214,19 @@ fn on_broadcast_arrived(device: u128, broadcast: &mut BroadCast) {
 }
 
 fn on_cmd_response_arrived(device: u128, header: HidReportHeader, data: Vec<u8>) {
+    // println!("on_cmd_response_arrived called for device {:?} cmd {:02X?}", uuid::Uuid::from_u128(device), header.cmd(None));
     #[cfg(not(target_arch = "wasm32"))]
     {
         let callbacks = CMD_RESPONSE_CALLBACKS
             .try_lock()
             .expect("CMD_RESPONSE_CALLBACKS lock poisoned");
         if let Some(callback) = callbacks.get(&device) {
+            use pollster::FutureExt;
+
             let callback_clone = callback.clone();
             drop(callbacks);
-            let _ = callback_clone.call(device, (header.clone(), data.clone()));
+            // println!("on_cmd_response_arrived calling callback for device {:?} cmd {:02X?}", uuid::Uuid::from_u128(device), header.cmd(None));
+            let _ = callback_clone.call(device, (header.clone(), data.clone())).block_on();
         }
     }
 

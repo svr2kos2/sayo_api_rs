@@ -56,9 +56,9 @@ const TIMEOUT_MS: u32 = 8000;
 
 pub struct ReportDecoder {
     handle: u128,
-    buffers: Mutex<HashMap<(u8, u8, u8), Vec<u8>>>,
+    buffers: Mutex<HashMap<(u8, u8, u8, u8), Vec<u8>>>,
     waiter_channels:
-        Mutex<HashMap<(u8, u8, u8), VecDeque<oneshot::Sender<(HidReportHeader, Vec<u8>)>>>>,
+        Mutex<HashMap<(u8, u8, u8, u8), VecDeque<oneshot::Sender<(HidReportHeader, Vec<u8>)>>>>,
     screen_buffer: Vec<u8>,
     broadcast: Arc<dyn Fn(u128, &mut BroadCast) + Send + Sync + 'static>,
     cmd_response: Arc<dyn Fn(u128, HidReportHeader, Vec<u8>) + Send + Sync + 'static>,
@@ -93,9 +93,6 @@ impl ReportDecoder {
             return Ok(()); // 不是我们关心的报告ID，直接返回
         }
         let echo = header.echo(None).ok_or(ReportError::BadReportHeader)?;
-        if echo != SayoDeviceApi::ECHO && echo != 0x00 {
-            return Ok(()); // 不是我们关心的echo，直接返回
-        }
 
         if echo != 0x00 {
             //check crc
@@ -113,7 +110,7 @@ impl ReportDecoder {
         let cmd = header.cmd(None).ok_or(ReportError::BadReportHeader)?;
         let index = header.index(None).ok_or(ReportError::BadReportHeader)?;
         let len = header.len(None).ok_or(ReportError::BadReportHeader)?;
-        let handle = (report_id, cmd, index);
+        let handle = (report_id, echo, cmd, index);
         if len + 4 > packet.len() as u16 {
             println!("Bad Report Length {:?}", packet.len());
             return Err(ReportError::BadReportLength(packet.len()));
@@ -239,6 +236,7 @@ impl ReportDecoder {
     fn on_package_complete(&mut self, header: HidReportHeader, data: Vec<u8>) {
         let echo = header.echo(None).unwrap_or(0);
         let cmd = header.cmd(None).unwrap_or(0);
+        
         // if cmd != 0xFF && cmd != 0x13 && cmd != 0x25 && cmd != 0x15 && cmd != 0x27 {
         //     println!("Report arrived: {:02X?} {:02X?}", header.bytes.vec(0, None, None).unwrap_or(Vec::new()), data);
         // }
@@ -247,6 +245,11 @@ impl ReportDecoder {
             self.broadcast.clone()(self.handle, broadcast);
         } else {
             (self.cmd_response.clone())(self.handle, header.clone(), data.clone());
+            // 非本实例关心的 echo：依然完成拼包/CRC 校验，但在此处丢弃，不继续分发。
+            // （broadcast 仍然保留 echo==0x00 的逻辑）
+            if echo != SayoDeviceApi::ECHO && echo != 0x00 {
+                return;
+            }
             self.on_response_arrived(header, data);
         }
     }
@@ -254,6 +257,7 @@ impl ReportDecoder {
     fn on_response_arrived(&mut self, header: HidReportHeader, data: Vec<u8>) {
         let handle = (
             header.report_id(None).unwrap_or(0),
+            header.echo(None).unwrap_or(0),
             header.cmd(None).unwrap_or(0),
             header.index(None).unwrap_or(0),
         );
@@ -315,7 +319,8 @@ impl ReportDecoder {
         cmd: u8,
         index: u8,
     ) -> impl Future<Output = Result<(HidReportHeader, T), ReportError>> + use<T> {
-        let handle = (report_id, cmd, index);
+        // 请求响应默认只等待本实例的 echo。
+        let handle = (report_id, SayoDeviceApi::ECHO, cmd, index);
         //println!("Request response: {:02X?}", handle);
         let (tx, rx) = oneshot::channel::<(HidReportHeader, Vec<u8>)>();
         let mut waiter_channels = match self.waiter_channels.lock() {
