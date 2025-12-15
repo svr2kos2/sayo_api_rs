@@ -579,18 +579,18 @@ impl AddressableData for DisplayAssetsPacket {
     }
 }
 
-impl CodecableHidPackage for LcdDrawData {
+impl CodecableHidPackage for LCDDrawData {
     const CMD: Option<u8> = None;
 
     fn new(bytes: RwBytes) -> Self {
-        LcdDrawData { bytes }
+        LCDDrawData { bytes }
     }
 
     fn into_vec(&self) -> Vec<u8> {
         self.bytes.clone().into_vec()
     }
     fn empty() -> Self {
-        LcdDrawData {
+        LCDDrawData {
             bytes: RwBytes::new(vec![]),
         }
     }

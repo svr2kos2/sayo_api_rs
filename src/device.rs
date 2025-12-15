@@ -1098,7 +1098,7 @@ impl SayoDeviceApi {
         return res;
     }
 
-    pub async fn get_lcd_draw_datas(&self, layer: ScreenLayer) -> Vec<LcdDrawData> {
+    pub async fn get_lcd_draw_datas(&self, layer: ScreenLayer) -> Vec<LCDDrawData> {
         let report_id = self.get_report_id();
         let cmd = layer as u8;
         return self.request_all_index(report_id, cmd).await;
@@ -1108,8 +1108,8 @@ impl SayoDeviceApi {
         &self,
         layer: u8,
         index: u8,
-        data: &LcdDrawData,
-    ) -> Option<LcdDrawData> {
+        data: &LCDDrawData,
+    ) -> Option<LCDDrawData> {
         let report_id = self.get_report_id();
         let cmd = layer;
         let response = self.request(report_id, SayoDeviceApi::ECHO, cmd, index, data);

@@ -284,7 +284,7 @@ impl SystemInfo {
         self.bytes.u16(2, value)
     }
 
-    pub fn lcd_refres_rate(&self, value: Option<u8>) -> Option<u8> {
+    pub fn lcd_refresh_rate(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(4, value)
     }
 
@@ -306,11 +306,9 @@ impl SystemInfo {
         }
     }
 
-    pub fn cfg_range(&self) -> u8 {
-        self.bytes
-            .u8(5, None)
-            .expect("cfg_range not found in SystemInfo")
-            >> 4
+    pub fn cfg_range(&self) -> Option<u8> {
+        let byte = self.bytes.u8(5, None)?;
+        Some(byte >> 4)
     }
 
     pub fn sys_time_ms(&self, value: Option<u16>) -> Option<u16> {
@@ -1386,6 +1384,9 @@ impl AdvancedKeyBinding {
         }
         self.bytes.u8(36 + index, value)
     }
+    pub fn func_opts(&self, value: Option<Vec<u8>>) -> Option<Vec<u8>> {
+        self.bytes.vec(36, Some(12), value)
+    }
 }
 
 // #[repr(C)]
@@ -1544,7 +1545,7 @@ impl DisplayData {
         self.bytes.vec(12, Some(len), value)
     }
 
-    pub fn packet_len(bytes: &RwBytes, at: u32) -> Option<u32> {
+    pub(in crate::structures) fn packet_len(bytes: &RwBytes, at: u32) -> Option<u32> {
         let data_type = bytes
             .u8(at as usize, None)
             .expect("Can not get data_type in DisplayData::packet_len");
@@ -1661,11 +1662,11 @@ pub struct LCDWidget {
 impl LCDWidget {
     const SIZE: usize = 2;
 
-    pub fn num(&self, value: Option<u8>) -> Option<u8> {
+    pub fn index(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(0, value)
     }
 
-    pub fn mixed_mode(&self, value: Option<u8>) -> Option<u8> {
+    pub fn mix_mode(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(1, value)
     }
 }
@@ -1686,20 +1687,20 @@ impl LCDFont {
         self.bytes.u8(1, value)
     }
 
-    pub fn dig(&self, value: Option<u8>) -> Option<u8> {
+    pub fn digit(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(2, value)
     }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct LCDPic {
+pub struct LCDImage {
     pub bytes: RwBytes,
 }
-impl LCDPic {
+impl LCDImage {
     const SIZE: usize = 1;
 
-    pub fn num(&self, value: Option<u8>) -> Option<u8> {
+    pub fn index(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(0, value)
     }
 }
@@ -1736,31 +1737,31 @@ impl LCDInfo {
         Some(LCDFont { bytes })
     }
 
-    pub fn lcd_pic(&self) -> Option<LCDPic> {
-        let bytes = match self.bytes.ref_at(0, LCDPic::SIZE) {
+    pub fn lcd_image(&self) -> Option<LCDImage> {
+        let bytes = match self.bytes.ref_at(0, LCDImage::SIZE) {
             Some(bytes) => bytes,
             None => return None,
         };
-        Some(LCDPic { bytes })
+        Some(LCDImage { bytes })
     }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone)]
 
-pub struct LcdDrawData {
+pub struct LCDDrawData {
     pub bytes: RwBytes,
 }
-impl LcdDrawData {
-    pub fn type_(&self, value: Option<u8>) -> Option<u8> {
+impl LCDDrawData {
+    pub fn data_type(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(0, value)
     }
 
-    pub fn key_num(&self, value: Option<u8>) -> Option<u8> {
+    pub fn event_key_id(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(1, value)
     }
 
-    pub fn key_event(&self, value: Option<u8>) -> Option<u8> {
+    pub fn event_type(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(2, value)
     }
 
@@ -1796,8 +1797,8 @@ impl LcdDrawData {
         self.bytes.u32(16, value)
     }
 
-    pub fn str(&self, value: Option<String>) -> Option<String> {
-        let encoding = match self.type_(None) {
+    pub fn text(&self, value: Option<String>) -> Option<String> {
+        let encoding = match self.data_type(None) {
             Some(4) => u8::from(Encoding::ASCII),
             Some(5) => u8::from(Encoding::UTF16LE),
             _ => return None,
@@ -1849,7 +1850,7 @@ impl LedEffect {
         self.bytes.u8(2, value)
     }
 
-    pub fn sw(&self, value: Option<u8>) -> Option<u8> {
+    pub fn enabled(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(3, value)
     }
 
@@ -2007,11 +2008,11 @@ pub struct GamePadCfg {
 }
 
 impl GamePadCfg {
-    pub fn type_(&self, value: Option<u8>) -> Option<u8> {
+    pub fn gamepad_type(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(0, value)
     }
 
-    pub fn option(&self, value: Option<u8>) -> Option<u8> {
+    pub fn options(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(1, value)
     }
 
@@ -2302,7 +2303,7 @@ impl AmbientLED {
         }
     }
 
-    pub fn color(&self, value: Option<u32>) -> Option<u32> {
+    pub fn color0(&self, value: Option<u32>) -> Option<u32> {
         match value {
             Some(value) => {
                 self.r(Some(((value >> 16) & 0xFF) as u8));
