@@ -252,8 +252,18 @@ impl DeviceInfo {
         self.bytes.u8(8, value)
     }
 
+    pub fn key_fn_num(&self, value: Option<u8>) -> Option<u8> {
+        match self.bytes.u8(9, value) {
+            Some(byte) => Some((byte & 0xF0) >> 4),
+            None => None,
+        }
+    }
+
     pub fn key_fn(&self, value: Option<u8>) -> Option<u8> {
-        self.bytes.u8(9, value)
+        match self.bytes.u8(9, value) {
+            Some(byte) => Some(byte & 0x0F),
+            None => None,
+        } 
     }
 
     pub fn cpu_load_1s(&self, value: Option<u8>) -> Option<u8> {
@@ -1285,9 +1295,9 @@ impl AnalogKeyInfo2 {
     }
 }
 
+
 #[repr(C)]
 #[derive(Debug, Clone)]
-
 pub struct AdvancedKeyBinding {
     pub bytes: RwBytes,
 }
@@ -1881,6 +1891,23 @@ impl LedEffect {
         self.bytes.u8(5, value)
     }
 
+    pub fn mode_and_sub_mode(&self, mode: Option<u16>) -> Option<u16> {
+        match mode {
+            Some(value) => {
+                let mode = (value & 0xFF) as u8;
+                let sub_mode = ((value >> 8) & 0xFF) as u8;
+                self.mode(Some(mode));
+                self.sub_mode(Some(sub_mode));
+                Some(value)
+            }
+            None => {
+                let mode = self.mode(None)? as u16;
+                let sub_mode = self.sub_mode(None)? as u16;
+                Some(mode | (sub_mode << 8))
+            }
+        }
+    }
+
     pub fn speed(&self, value: Option<u8>) -> Option<u8> {
         self.bytes.u8(6, value)
     }
@@ -2466,6 +2493,7 @@ impl BroadCastData {
             0x16 => "BRD_TYPE_KB_VALUE_JOYSTICK_ADD",
             0x17 => "BRD_TYPE_KB_VALUE_JOYSTICK_DEL",
             0x18 => "BRD_TYPE_KB_VALUE_JOYSTICK_HAT",
+            0x19 => "BRD_TYPE_HALL_KEY_RELOAD",
             0x80 => "BRD_TYPE_SYS_TIME_MS",
             0x81 => "BRD_TYPE_MU_DATA",
             0xC0 => "BRD_TYPE_SYS_TIME",
@@ -2503,6 +2531,7 @@ impl std::fmt::Debug for BroadCastData {
             0x16 => "BRD_TYPE_KB_VALUE_JOYSTICK_ADD",
             0x17 => "BRD_TYPE_KB_VALUE_JOYSTICK_DEL",
             0x18 => "BRD_TYPE_KB_VALUE_JOYSTICK_HAT",
+            0x19 => "BRD_TYPE_HALL_KEY_RELOAD",
 
             0x80 => "BRD_TYPE_SYS_TIME_MS",
             0x81 => "BRD_TYPE_MU_DATA",
@@ -2516,9 +2545,20 @@ impl std::fmt::Debug for BroadCastData {
 
             _ => fmt_tp.as_str(),
         };
+
+        // Print payload bytes as hex instead of the default Vec<u8> debug (decimal).
+        let data_vec = self.bytes.deep_clone().into_vec();
+        let mut data_hex = String::with_capacity(data_vec.len() * 3);
+        for (i, b) in data_vec.iter().enumerate() {
+            if i != 0 {
+                data_hex.push(' ');
+            }
+            use std::fmt::Write as _;
+            let _ = write!(&mut data_hex, "{:02X}", b);
+        }
         f.debug_struct("BroadCastData")
             .field("type_", &type_str)
-            // .field("data", &self.bytes.deep_clone().into_vec())
+            .field("data", &data_hex)
             .finish()
     }
 }
@@ -2571,3 +2611,4 @@ impl BroadCast {
         Some(res)
     }
 }
+

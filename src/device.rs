@@ -1637,32 +1637,39 @@ impl SayoDeviceApi {
         response.await
     }
 
-    pub async fn get_key_phyical_status(&self) -> Vec<u8> {
+    pub async fn get_key_physical_status(&self) -> Option<Vec<u8>> {
         let report_id = self.get_report_id();
         let cmd: u8 = 0x1E;
         let response = self
             .request(report_id, SayoDeviceApi::ECHO, cmd, 0, &ByteArray::empty())
             .await;
-        match response {
-            Some(data) => data.into_vec(),
-            None => Vec::new(),
+        // map bit to byte
+        let mut res: Vec<u8> = Vec::new();
+        if let Some(byte_array) = response {
+            let bytes = byte_array.data(None).expect("No bytes in ByteArray");
+            for byte in bytes {
+                for i in 0..8 {
+                    res.push((byte >> i) & 0x01);
+                }
+            }
         }
+        Some(res)
     }
 
-    pub async fn set_key_phyical_status(&self, status: Vec<u8>) -> bool {
-        let report_id = self.get_report_id();
-        let cmd: u8 = 0x1E;
-        let response = self
-            .request(
-                report_id,
-                SayoDeviceApi::ECHO,
-                cmd,
-                0,
-                &ByteArray::new(RwBytes::new(status)),
-            )
-            .await;
-        response.is_some()
-    }
+    // pub async fn set_key_phyical_status(&self, status: Vec<u8>) -> bool {
+    //     let report_id = self.get_report_id();
+    //     let cmd: u8 = 0x1E;
+    //     let response = self
+    //         .request(
+    //             report_id,
+    //             SayoDeviceApi::ECHO,
+    //             cmd,
+    //             0,
+    //             &ByteArray::new(RwBytes::new(status)),
+    //         )
+    //         .await;
+    //     response.is_some()
+    // }
 
     pub async fn get_led_effect(&self) -> Option<LedEffect> {
         let report_id = self.get_report_id();

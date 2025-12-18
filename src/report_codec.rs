@@ -242,6 +242,12 @@ impl ReportDecoder {
         // }
         if echo == 0x00 && cmd == 0xff {
             let broadcast = &mut BroadCast::new(RwBytes::new(data));
+
+            for bc in broadcast.data().unwrap_or(vec![]) {
+                // println!("Broadcast package: {:?}", bc);
+            }
+
+
             self.broadcast.clone()(self.handle, broadcast);
         } else {
             (self.cmd_response.clone())(self.handle, header.clone(), data.clone());
