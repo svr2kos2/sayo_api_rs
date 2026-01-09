@@ -348,6 +348,19 @@ pub async fn unsub_broadcast(uuid: u128) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn request_device(vpids: Vec<u32>) {
+    let mut filter = vec![];
+    for vpid in vpids {
+        let vid = vpid >> 16;
+        let pid = vpid & 0xFFFF;
+        filter.push((vid as u16, match pid {
+            0x0000 => None,
+            _ => Some(pid as u16),
+        }));
+    }
+    let _ = hid_rs::Hid::request_device(filter).await;
+}
+
 pub async fn get_device_list() -> Vec<SayoDeviceApi> {
     let devices = match hid_rs::Hid::get_device_list() {
         Ok(devices) => devices,
