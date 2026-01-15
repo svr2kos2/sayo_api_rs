@@ -565,6 +565,58 @@ impl RFConfig {
 #[repr(C)]
 #[derive(Debug, Clone)]
 
+pub struct MonkeyGpios {
+    pub bytes: RwBytes,
+}
+impl MonkeyGpios {
+    fn get_byte(&self, index: u8) -> Option<u8> {
+        if index > self.bytes.len() as u8 {
+            return None;
+        }
+        self.bytes.u8(index.into(), None)
+    }
+
+    pub fn is_input(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x80) != 0)
+    }
+    pub fn is_output(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x40) != 0)
+    }
+    pub fn is_analog(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x20) != 0)
+    }
+    pub fn is_led(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x10) != 0)
+    }
+    pub fn is_weak(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x08) != 0)
+    }
+
+    pub fn read_level(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        Some((gpio_byte & 0x01) != 0)
+    }
+
+    pub fn set_high_or_pullup(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        self.bytes.u8(index.into(), Some(gpio_byte | 0x01));
+        Some(true)
+    }
+    pub fn set_low_or_pulldown(&self, index: u8) -> Option<bool> {
+        let gpio_byte = self.get_byte(index)?;
+        self.bytes.u8(index.into(), Some(gpio_byte & 0xFE));
+        Some(false)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+
 pub struct KeyData {
     pub bytes: RwBytes,
 }

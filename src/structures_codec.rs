@@ -210,6 +210,28 @@ impl CodecableHidPackage for RFConfig {
     }
 }
 
+impl CodecableHidPackage for MonkeyGpios {
+    const CMD: Option<u8> = Some(0x07);
+
+    fn new(bytes: RwBytes) -> Self {
+        MonkeyGpios { bytes }
+    }
+
+    fn into_vec(&self) -> Vec<u8> {
+        self.bytes.clone().into_vec()
+    }
+    fn empty() -> Self {
+        MonkeyGpios {
+            bytes: RwBytes::new(vec![]),
+        }
+    }
+
+    fn deep_clone(&self) -> Self {
+        let bytes = self.bytes.deep_clone();
+        Self { bytes }
+    }
+}
+
 impl CodecableHidPackage for KeyInfo {
     const CMD: Option<u8> = Some(0x10);
 

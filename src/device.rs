@@ -970,8 +970,24 @@ impl SayoDeviceApi {
         }
     }
 
+    pub async fn get_monkey_gpios(&self) -> Option<MonkeyGpios> {
+        let report_id = self.get_report_id();
+        const CMD: u8 = MonkeyGpios::CMD.unwrap();
+        const INDEX: u8 = 0x00;
+        let empty = MonkeyGpios::empty();
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, &empty);
+        response.await
+    }
+
+    pub async fn set_monkey_gpios(&self, monkey_gpios: &MonkeyGpios) -> Option<MonkeyGpios> {
+        let report_id = self.get_report_id();
+        const CMD: u8 = MonkeyGpios::CMD.unwrap();
+        const INDEX: u8 = 0x00;
+        let response = self.request(report_id, SayoDeviceApi::ECHO, CMD, INDEX, monkey_gpios);
+        response.await
+    }
+
     pub async fn get_key_infos(&self) -> Vec<KeyInfo> {
-        println!("get_key_infos");
         let report_id = self.get_report_id();
         const CMD: u8 = 0x10;
         self.request_all_index::<KeyInfo>(report_id, CMD).await

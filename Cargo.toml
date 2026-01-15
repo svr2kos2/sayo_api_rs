@@ -11,8 +11,8 @@ path = "examples/simple_test.rs"
 futures = "0.3.30"
 encoding_rs = "0.8.34"
 once_cell = "1.19.0"
-# hid_rs = { path = "../hid_rs" }
-hid_rs = {git = "https://github.com/svr2kos2/hid_rs.git" }
+hid_rs = { path = "../hid_rs" }
+# hid_rs = {git = "https://github.com/svr2kos2/hid_rs.git" }
 
 uuid = "1.19.0"
 pollster = "0.3"
